@@ -1,12 +1,12 @@
 {
-    "id": "./index.html",
+    "id": "/index.html",
     "theme_color": "#317EFB",
     "background_color": "#ffffff",
     "display": "standalone",
     "scope": "./",
     "start_url": "./index.html",
     "name": "Budget Tracker",
-    "short_name": "Budget",
+    "short_name": "Budget Tracker",
     "icons": [
         {
             "src": "./icons/icon-72x72.png",

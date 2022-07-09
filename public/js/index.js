@@ -1,18 +1,47 @@
 let transactions = [];
 let myChart;
 
-fetch("/api/transaction")
-  .then(response => {
-    return response.json();
-  })
-  .then(data => {
-    // save db data on global variable
-    transactions = data;
 
-    populateTotal();
-    populateTable();
-    populateChart();
+async function syncPending() {
+
+  const pending = await getPendingTransactions();
+
+  // also send to server
+  let resp = await fetch("/api/transaction/bulk", {
+    method: "POST",
+    body: JSON.stringify(pending),
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json"
+    }
   });
+  console.log(resp);
+  if (resp.ok) {
+    await clearPendingTransactions();
+  }
+
+  await getTransactions();
+}
+
+
+async function getTransactions() {
+  let resp = await fetch("/api/transaction");
+  let data = await resp.json();
+  transactions = data;
+
+  if (transactions) {
+    await setSyncedTransactions(transactions);
+  }
+  else {
+    // fetch failed, so get from indexed db
+    transactions = await getAllTransactions();
+  }
+
+  populateTotal();
+  populateTable();
+  populateChart();
+
+}
 
 function populateTotal() {
   // reduce transaction amounts to a single total value
@@ -66,14 +95,14 @@ function populateChart() {
 
   myChart = new Chart(ctx, {
     type: 'line',
-      data: {
-        labels,
-        datasets: [{
-            label: "Total Over Time",
-            fill: true,
-            backgroundColor: "#6666ff",
-            data
-        }]
+    data: {
+      labels,
+      datasets: [{
+        label: "Total Over Time",
+        fill: true,
+        backgroundColor: "#6666ff",
+        data
+      }]
     }
   });
 }
@@ -111,7 +140,7 @@ function sendTransaction(isAdding) {
   populateChart();
   populateTable();
   populateTotal();
-  
+
   // also send to server
   fetch("/api/transaction", {
     method: "POST",
@@ -121,39 +150,48 @@ function sendTransaction(isAdding) {
       "Content-Type": "application/json"
     }
   })
-  .then(response => {    
-    return response.json();
-  })
-  .then(data => {
-    if (data.errors) {
-      errorEl.textContent = "Missing Information";
-    }
-    else {
+    .then(response => {
+      return response.json();
+    })
+    .then(data => {
+      if (data.errors) {
+        errorEl.textContent = "Missing Information";
+      }
+      else {
+        addSyncedTransaction(transaction);
+
+        // clear form
+        nameEl.value = "";
+        amountEl.value = "";
+      }
+    })
+    .catch(err => {
+      // Handled in service worker on fetch
+      //saveRecord(transaction);
+
       // clear form
       nameEl.value = "";
       amountEl.value = "";
-    }
-  })
-  .catch(err => {
-    // fetch failed, so save in indexed db
-    saveRecord(transaction);
-
-    // clear form
-    nameEl.value = "";
-    amountEl.value = "";
-  });
+    });
 }
 
-document.querySelector("#add-btn").onclick = function() {
+document.querySelector("#add-btn").onclick = function () {
   sendTransaction(true);
 };
 
-document.querySelector("#sub-btn").onclick = function() {
+document.querySelector("#sub-btn").onclick = function () {
   sendTransaction(false);
 };
 
-(function() {
-  if("serviceWorker" in navigator) {
+document.addEventListener('DOMContentLoaded', async (e) => {
+  await syncPending();
+});
+
+
+window.addEventListener("online", async () => await syncPending());
+
+(function () {
+  if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./service-worker.js")
       .then(() => console.log("Service Worker registered successfully."))
       .catch(error => console.log("Service Worker registration failed:", error));

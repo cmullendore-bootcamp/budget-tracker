@@ -1,45 +1,52 @@
 
 let db;
 
-const request = indexedDB.open('budget-tracker', 1);
+const ensureDb = async () => {
+    return new Promise((resolve, reject) => {
 
-request.onsuccess = function () {
-    db = request.result;
+        const request = indexedDB.open('budget-tracker', 1);
+
+        request.onsuccess = function () {
+            db = request.result;
+            resolve(db);
+        }
+        
+        request.onupgradeneeded = function (event) {
+        
+            const db = event.target.result;
+        
+            db.createObjectStore('synced', { autoIncrement: true });
+            db.createObjectStore('pending', { autoIncrement: true });
+        };
+        
+        request.onerror = function (event) {
+            reject(db);
+        };
+
+    });
 }
 
-request.onupgradeneeded = function (event) {
 
-    const db = event.target.result;
-
-    db.createObjectStore('synced', { autoIncrement: true });
-    db.createObjectStore('pending', { autoIncrement: true });
-};
-
-request.onerror = function (event) {
-    console.log(event.target.errorCode);
-};
 
 
 const addPendingTransaction = async (trans) => {
+    const db = await ensureDb();
     const transaction = db.transaction(["pending"], "readwrite");
     const transObStore = transaction.objectStore("pending");
-    //for (i = 0; i < trans.length; i++) {
-        transObStore.add(trans);
-    //}
+    transObStore.add(trans);
     transaction.commit();
 }
 
-const addSyncedTransactions = async (trans) => {
+const addSyncedTransaction = async (trans) => {
+    const db = await ensureDb();
     const transaction = db.transaction(["synced"], "readwrite");
     const transObStore = transaction.objectStore("synced");
-    for (i = 0; i < trans.length; i++) {
-        transObStore.add(trans[i]);
-    }
-
+    transObStore.add(trans);
     transaction.commit();
 }
 
 const getPendingTransactionCount = async () => {
+    const db = await ensureDb();
     const transaction = db.transaction(["pending"], "readwrite");
     const transObStore = transaction.objectStore("pending");
     const countResult = transObStore.count();
@@ -49,6 +56,8 @@ const getPendingTransactionCount = async () => {
 }
 
 const setSyncedTransactions = async (syncedTrans) => {
+    const db = await ensureDb();
+
     const synced = db.transaction(["synced"], "readwrite");
     const syncedStore = synced.objectStore("synced");
     syncedStore.clear();
@@ -59,6 +68,7 @@ const setSyncedTransactions = async (syncedTrans) => {
 }
 
 const clearPendingTransactions = async () => {
+    const db = await ensureDb();
     const pending = db.transaction(["pending"], "readwrite");
     const pendingStore = pending.objectStore("pending");
     pendingStore.clear();
@@ -66,7 +76,9 @@ const clearPendingTransactions = async () => {
 }
 
 const getPendingTransactions = async () => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+        const db = await ensureDb();
+
         const pending = db.transaction(["pending"], "readwrite");
         const pendingStore = pending.objectStore("pending");
         const getAllResponse = pendingStore.getAll();
@@ -78,6 +90,8 @@ const getPendingTransactions = async () => {
 }
 
 const getAllTransactions = async () => {
+    const db = await ensureDb();
+    
     const all = [];
 
     const syncedPromise = new Promise((resolve, reject) => {
